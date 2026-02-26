@@ -1,6 +1,8 @@
 import asyncio
+import logging
 import math
 import random
+import sys
 import time
 from typing import List
 
@@ -8,14 +10,27 @@ from fastapi import FastAPI, Request, Response
 import structlog
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+# Configure standard logging to output to stdout
+logging.basicConfig(
+    format="%(message)s",
+    stream=sys.stdout,
+    level=logging.INFO,
+)
+
 # Configure structlog for JSON logging
 structlog.configure(
     processors=[
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
         structlog.processors.JSONRenderer()
-    ]
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
 )
 logger = structlog.get_logger(__name__)
 
