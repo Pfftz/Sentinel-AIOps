@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+    api:
+        build: .
+        container_name: sentinel-target-api
+        ports:
+            - "8000:8000"
+        environment:
+            - PYTHONUNBUFFERED=1
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "python",
+                    "-c",
+                    "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+
+    prometheus:
+        image: prom/prometheus:latest
+        container_name: sentinel-prometheus
+        volumes:
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml
+        ports:
+            - "9090:9090"
+        depends_on:
+            - api
+        restart: unless-stopped

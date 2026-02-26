@@ -1,0 +1,4 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+prometheus-client>=0.17.1
+structlog>=23.1.0
