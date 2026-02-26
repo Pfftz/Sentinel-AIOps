@@ -170,6 +170,59 @@ class SentinelObserver:
             print(f"Error            : {diagnosis.get('error')}")
         print("="*60 + "\n")
 
+    def execute_remediation(self, command: str):
+        """Execute authorized system commands to heal the target API."""
+        ALLOWED_COMMANDS = [
+            'docker-compose restart',
+            'docker-compose stop',
+            'docker-compose up -d',
+            'docker restart sentinel-target-api',
+            'docker stop sentinel-target-api'
+        ]
+
+        if command not in ALLOWED_COMMANDS:
+            print(
+                f"[WARNING] Command '{command}' is not in the allowed whitelist. Skipping execution.")
+            return False
+
+        print(f"\n[!] WARNING: About to execute system command: {command}")
+        print(f"[*] AI-Suggested Action: Executing {command}...")
+
+        try:
+            # Split the command into a list to avoid shell=True
+            cmd_list = command.split()
+            result = subprocess.run(
+                cmd_list, capture_output=True, text=True, check=True)
+            print(f"[*] Command executed successfully.")
+
+            # Wait 30 seconds and check health
+            print("[*] Waiting 30 seconds for the service to stabilize...")
+            time.sleep(30)
+
+            health_url = "http://localhost:8000/health"
+            try:
+                response = requests.get(health_url, timeout=5)
+                if response.status_code == 200:
+                    print("[+] Healing was successful! The service is healthy.")
+                    return True
+                else:
+                    print(
+                        f"[-] Healing failed. Health check returned status code: {response.status_code}. Manual intervention is still required.")
+                    return False
+            except requests.exceptions.RequestException as e:
+                print(
+                    f"[-] Healing failed. Could not reach health endpoint: {e}. Manual intervention is still required.")
+                return False
+
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] Command execution failed: {e}")
+            print(f"Output: {e.stderr}")
+            return False
+        except FileNotFoundError:
+            print(
+                "[ERROR] Command not found. Ensure docker/docker-compose is installed.")
+            return False
+
     def monitor(self):
         """Main loop to poll Prometheus and trigger AI analysis on anomalies."""
         print(f"Starting SentinelObserver... Polling every 30 seconds.")
@@ -209,6 +262,13 @@ class SentinelObserver:
                 logs = self.fetch_container_logs()
                 diagnosis = self.analyze_with_ai(metrics_data, logs)
                 self.print_diagnosis(diagnosis)
+
+                # Action Layer: Auto-remediation for High/Critical severity
+                severity = diagnosis.get('severity', '').lower()
+                if severity in ['high', 'critical']:
+                    remediation_step = diagnosis.get('remediation_step')
+                    if remediation_step and remediation_step != 'N/A':
+                        self.execute_remediation(remediation_step)
 
                 # Sleep longer after an anomaly to prevent spamming
                 print("Sleeping for 60 seconds after anomaly detection...")
